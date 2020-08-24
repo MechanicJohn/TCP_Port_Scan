@@ -1,6 +1,7 @@
 #!/usr/bin/perl
 # portscan -h for usage
 # created by john tassano
+# Version 1.2
 
 use strict;
 use Socket;
@@ -11,7 +12,7 @@ use Net::Ping;
 
 
 # TCP Port scanner
-my $VERSION = '1.1';
+my $VERSION = '1.2';
 $| = 1; # so \r works right, # flush the print buffer
 $SIG{INT} = \&interrupt;
 my $LOG_FILE;
@@ -24,11 +25,11 @@ print " PORTSCAN v$VERSION\n";
 
 
 my $p = Net::Ping->new;
-if ($p->ping($ip, 1)) {
-    print "Host is reachable\n";
+if ($p->ping($ip, 1) || $ip == 127.0.0.1 ) {
+    print " Host is reachable\n";
 }
 else{
-	 print "Host is not reachable\n";
+	 print " Host is not reachable\n";
 }
 
 
@@ -104,10 +105,10 @@ print " Press CTRL + C to terminate scan\n";
 foreach (my $port = $start_port ; $port <= $end_port ; $port++) 
 {
     #\r will refresh the line
-    print "\r Scanning UDP port $port";
+    print "\r Scanning TCP port $port";
      
     #Connect
-    my $socket = IO::Socket::INET->new(PeerAddr => $ip , PeerPort => $port , Proto => 'udp' , Timeout => 1);
+    my $socket = IO::Socket::INET->new(PeerAddr => $ip , PeerPort => $port , Proto => 'tcp' , Timeout => 1);
 	 
     #Check connection
     if( $socket )
