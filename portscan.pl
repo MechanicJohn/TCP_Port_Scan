@@ -1,7 +1,6 @@
 #!/usr/bin/perl
 # portscan -h for usage
-# Created by John Tassano
-# John.Tassano@Centurylink.com
+# John.T
 # Version 1.4
 # TCP Port scanner
 
