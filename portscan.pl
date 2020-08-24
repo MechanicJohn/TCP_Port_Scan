@@ -1,113 +1,149 @@
 #!/usr/bin/perl
 # portscan -h for usage
-# created by john tassano
+# Created by John Tassano
 # John.Tassano@Centurylink.com
-# Version 1.3
+# Version 1.4
+# TCP Port scanner
 
 use strict;
 use Socket;
 use Data::Validate::Domain;
 use IO::Socket;
+#use IO::Handle;
 use Win32::Env;
-use Net::Ping;
-
-# TCP Port scanner
-my $VERSION = '1.3';
-$| = 1; # so \r works right, # flush the print buffer
+use Win32::Clipboard;
+use Net::Ping::External qw(ping);
 $SIG{INT} = \&interrupt;
-my $LOG_FILE;
 
-my ($ip, $protocol, $start_port, $end_port, $log, $domain, $address, $path);
+my $VERSION = '1.4';
+$| = 1; # so \r works right, # flush the print buffer
+print "\n";
+print " PORTSCAN V$VERSION - TCP CONNECTION\n";
+my $clip_enabled = 0;
+my $clip = Win32::Clipboard::GetText() if ( $clip_enabled );
+my ($ip, $protocol, $start_port, $end_port, $log, $host, $address, $path);
 $protocol = getprotobyname('tcp');
 ($ip, $start_port, $end_port, $log) = @ARGV;
-
-print "\n";
-print " PORTSCAN v$VERSION\n";
-print "Debug $ip $start_port $end_port $log"
-
-
-#my $p = Net::Ping->new;
-#if ($p->ping($ip, 1) || $ip == 127.0.0.1 ) {
-#    print " Host is reachable\n";
-#}
-#else{
-#	 print " Host is not reachable\n";
-#}
-
-
-
-if ($ip eq "-h") {
-    &usage();
-	exit 0;
-}
-
-if (!$ip) {
-	usage()
-}
-
-$path = $ENV{'USERPROFILE'};
-$path =~s/\\/\//g;
-$domain = $ip;
-$ip = "localhost" if not $ip;
-$start_port = 1 if not $start_port;
-$end_port = 100 if not $end_port;
-$log = "$path/portscan.txt" if not $log;
-my $valid = is_domain($domain);
-
-
-if ( $valid )
-{
-	my $resolve = inet_aton($domain);
-	$address ="Not valid";
-	if ($resolve) {
-		$address = inet_ntoa($resolve);
-	}
-	print " $domain $address \n";
-	$ip = $address;
-}
-
-#if($ip !~  m/^\d+\.\d+\.\d+\.\d+$/)
-#{
-#	usage();
-#	print " Invalid Host\n";
-#	exit 0;
-#}
-
-
-if($ip !~  m/^\d+\.\d+\.\d+\.\d+$/ and $ip ne "localhost")
+if (scalar(@ARGV) > 4)
 {
 	usage();
-	print " Invalid Host $ip\n";
-	exit 0;
+	print " Too Many Arguments\n";
+	exit 1;
 }
-
 
 if ( $start_port > $end_port )
 {
 	usage();
-	print " start_port can't be greater then the end_port. We cant backwards yo.\n";
-	exit 0;
+	print " start port can't be greater then the end port. We can't go backwards yo.\n";
+	exit 1;
 }
 
-
-unless (open($LOG_FILE, ">>$log")) {
-    die " Can't open log file $log for writing: $!\n"
+if (!$ip) 
+{
+	# Get clipboard if its not super long.
+	if( length($clip) < 50 && length($clip) > 1 && $clip_enabled)
+	{
+		$clip =~s/\n//g; # remove new line
+		$ip = $clip;
+		print " No input, getting Host from clipboard: $clip\n";
+	}
+	else
+	{
+		#print " No input, default to localhost 127.0.0.1\n";
+	}
 }
 
+if ($ip eq "-h") 
+{
+    &usage();
+	exit 1;
+}
+
+#Defaults
+$path = $ENV{'USERPROFILE'};
+$path =~s/\\/\//g;
+if (!$ip)
+{
+	$ip = '127.0.0.1';
+	usage();
+}
+$host = $ip;
+$start_port = 1 if not $start_port;
+$end_port = 100 if not $end_port;
+$log = "$path/portscan.txt" if not $log;
+
+my $ValidDomain = is_domain($host);
+if ( $ValidDomain )
+{
+	my $resolve = inet_aton($host);
+	$address ="Not valid";
+	if ($resolve) 
+	{
+		$address = inet_ntoa($resolve);
+		print " Name Resolution: $host $address \n";
+		$ip = $address;
+	}
+	else
+	{
+		print " Unable to resolve $host\n";
+	}
+}
+
+#match any number sperated by periods 
+# m/^\d+\.\d+\.\d+\.\d+$/
+#match valid ip address
+# ^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$
+
+if($ip !~  m/^(([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])\.){3}([0-9]|[1-9][0-9]|1[0-9]{2}|2[0-4][0-9]|25[0-5])$/ and $ip ne "localhost")
+{
+	usage();
+	print " Invalid IP Address $ip\n";
+	exit 1;
+}
+else
+{
+	my $google = ping(host => '8.8.8.8'); # google dns
+	my $alive = ping(host => $ip);
+	if ($alive)
+	{
+		print " Host $ip is reachable\n"
+	}
+	else
+	{
+		if ( $google )
+		{
+			print " Host $ip is not reachable by icmp pings. Scanning anyways\n";
+		}
+		else
+		{
+			print " Check Internet Connection Host $ip and google unreachable\n";
+			exit 1;
+		}
+	}
+}
+
+my $LOG_FILE;
+#Open file and append
+open($LOG_FILE, '>>', $log) or die "Can't open log file $log.\n";
 # Make file handle hot so the buffer is flushed after every write
+# Nasty way to autoflush the buffer.
 select((select($LOG_FILE), $| = 1)[0]);
+# Use IO::Handle 
+#$LOG_FILE->autoflush(1);
 
-print " Scanning $ip for open ports $start_port - $end_port to log file $log\n";
+print " LogFile: $log\n";
+print " Scanning $ip for open ports $start_port - $end_port\n";
+print "\n";
 
 my $ports;
 my @open_ports = ();
-
-print " Press CTRL + C to terminate scan\n";
+print " Press CTRL + C to terminate scan.\n";
 
 foreach (my $port = $start_port ; $port <= $end_port ; $port++) 
 {
     #\r will refresh the line
     print "\r Scanning TCP port $port";
+	
     #Connect to tcp port
     my $socket = IO::Socket::INET->new(PeerAddr => $ip , PeerPort => $port , Proto => 'tcp' , Timeout => 1);
 	 
@@ -118,44 +154,46 @@ foreach (my $port = $start_port ; $port <= $end_port ; $port++)
 		#push port to array
 		push (@open_ports, $port);
 		$| = 1;
-        print "\n Port $port is open.\n" ;
-		
+        print "\n Port $port is open\n" ;
     }
 }
 
-
-
 my $datestring = gmtime();
-print " Scan Completed $datestring";
-print $LOG_FILE "GMT date and time $datestring\n";
-#my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime();
-#print LOG_FILE "$mon/$mday/$year";
-if ($ports) {
-	print "\n";
+print " Scan Completed $datestring\n";
+print $LOG_FILE "\nGMT date and time $datestring\n";
+print $LOG_FILE "Finished Scanning $ip between port $start_port and $end_port\n";
+
+if ($ports) 
+{
 	print " The following ports are open on $ip port ";
-	print $LOG_FILE "The following ports are open on $ip port";
+	print $LOG_FILE "The following ports are open on $ip port ";
 	
-	foreach my $data(@open_ports) { 
-		print "$data ";
-		print $LOG_FILE "$data ";
+	foreach my $port(@open_ports) 
+	{ 
+		print "$port, ";
+		print $LOG_FILE "$port, ";
 	}
+}
+else
+{
+	print " No open ports found for Host $ip\n";
+	print $LOG_FILE "No open ports found for Host $ip\n";
 }
 
 print "\n";
 print $LOG_FILE "\n";
-print $LOG_FILE "Finished Scanning $ip between port $start_port and $end_port\n\n";
-close $LOG_FILE || die "close: $!";
-print "\n";
-usage();
-exit 0;
+close $LOG_FILE;
 
-sub usage() {
+sub usage 
+{
+	print " Defaults: portscan 127.0.0.1 1 100 portscan.txt\n";
     print " Usage: portscan [host] [start_port] [end_port] [logfile]\n";
-    print " Defaults: portscan localhost 1 1024 portscan.txt\n";
 }
 
 sub interrupt {
 	close $LOG_FILE;
-	print "\n Terminating PortScan\n";
-    exit;
+	die "\n Terminating port scan\n";
+    exit 1;
 }
+
+exit 1;

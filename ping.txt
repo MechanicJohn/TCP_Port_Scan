@@ -1,0 +1,24 @@
+my $p = Net::Ping->new;
+if ($p->ping($ip, 1) || $ip == 127.0.0.1 ) 
+{
+    print " Host is reachable\n";
+}
+else
+{
+	usage();
+	print " Host $ip is not reachable\n";
+	exit 0;
+}
+
+
+
+# Net::Ping->new("icmp"); requires admin privileges 
+#my $p = Net::Ping->new("icmp");
+#if ($p->ping($ip)) 
+#{
+#	print " Host $ip is reachable.\n"
+#}
+#else
+#{
+#	print " Host $ip is not reachable by icmp pings. Scanning anyways.\n";
+#}
